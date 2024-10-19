@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Data - AI Chat Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 h-screen flex flex-col">
+    <!-- Top bar -->
+    <div class="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+        <h1 class="text-xl font-semibold text-gray-800">AI Chat Assistant - Upload Data</h1>
+       
+    </div>
+
+    <!-- Main content area -->
+    <div class="flex-grow flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center">Upload Excel Files</h2>
+            <form id="uploadForm" class="space-y-6">
+                <div class="relative">
+                    <label for="files" class="block text-sm font-medium text-gray-700 mb-2">Select Excel Files</label>
+                    <div class="relative border-2 border-gray-300 border-dashed rounded-lg p-6 transition-all duration-300 hover:border-blue-500 hover:bg-blue-50">
+                        <input type="file" id="files" name="files[]" accept=".xlsx, .xls" multiple class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                        <div class="text-center">
+                            <i class="fas fa-file-excel text-4xl text-gray-400 mb-2"></i>
+                            <p class="text-sm text-gray-600">Drag and drop your Excel files here, or click to select multiple files</p>
+                        </div>
+                    </div>
+                    <div id="fileList" class="mt-2 text-sm text-gray-600"></div>
+                </div>
+                <button type="submit" class="w-full bg-blue-500 text-white py-3 px-4 rounded-lg hover:bg-blue-600 transition duration-300 flex items-center justify-center">
+                    <i class="fas fa-upload mr-2"></i>
+                    Upload Files
+                </button>
+            </form>
+            
+            <div id="uploadStatus" class="mt-6 text-center hidden">
+                <div class="flex items-center justify-center">
+                    <i id="statusIcon" class="mr-2 text-2xl"></i>
+                    <p id="statusText" class="text-lg"></p>
+                </div>
+                <div id="progressContainer" class="mt-4 hidden">
+                    <div class="bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                        <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <p id="progressText" class="text-sm text-gray-600 mt-1"></p>
+                </div>
+            </div>
+            
+            <button id="proceedToChat" class="w-full mt-6 bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition duration-300 flex items-center justify-center hidden">
+                <i class="fas fa-comments mr-2"></i>
+                Proceed to Chat
+            </button>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const threadId = urlParams.get('threadId');
+            const assistantId = urlParams.get('assistantId');
+
+            $('#files').on('change', function() {
+                const fileList = $('#fileList');
+                fileList.empty();
+                if (this.files.length > 0) {
+                    fileList.append('<p class="font-semibold">Selected files:</p>');
+                    $.each(this.files, function(index, file) {
+                        fileList.append(`<p>${file.name}</p>`);
+                    });
+                }
+            });
+
+            $("#uploadForm").submit(function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                formData.append('threadId', threadId);
+
+                $("#uploadStatus").removeClass("hidden");
+                $("#statusIcon").removeClass("fa-check-circle fa-times-circle").addClass("fa-spinner fa-spin text-blue-500");
+                $("#statusText").text("Uploading...").removeClass("text-green-500 text-red-500").addClass("text-blue-500");
+                $("#progressContainer").removeClass("hidden");
+                $("#progressBar").css("width", "0%");
+                $("#progressText").text("0% Uploaded");
+
+                $.ajax({
+                    url: "/api/feed-data",
+                    method: "POST",
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    xhr: function() {
+                        var xhr = new window.XMLHttpRequest();
+                        xhr.upload.addEventListener("progress", function(evt) {
+                            if (evt.lengthComputable) {
+                                var percentComplete = evt.loaded / evt.total;
+                                percentComplete = parseInt(percentComplete * 100);
+                                $("#progressBar").css("width", percentComplete + "%");
+                                $("#progressText").text(percentComplete + "% Uploaded");
+                            }
+                        }, false);
+                        return xhr;
+                    },
+                    success: function(response) {
+                        $("#statusIcon").removeClass("fa-spinner fa-spin text-blue-500").addClass("fa-check-circle text-green-500");
+                        $("#statusText").text("Data uploaded successfully!").removeClass("text-blue-500").addClass("text-green-500");
+                        $("#progressBar").css("width", "100%");
+                        $("#progressText").text("100% Uploaded");
+                        $("#proceedToChat").removeClass("hidden");
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("Error uploading data:", error);
+                        $("#statusIcon").removeClass("fa-spinner fa-spin text-blue-500").addClass("fa-times-circle text-red-500");
+                        $("#statusText").text("Failed to upload data. Please try again.").removeClass("text-blue-500").addClass("text-red-500");
+                        $("#progressContainer").addClass("hidden");
+                    }
+                });
+            });
+
+            $("#proceedToChat").click(function() {
+                window.location.href = `/chat.html?threadId=${threadId}&assistantId=${assistantId}`;
+            });
+        });
+    </script>
+</body>
+</html>

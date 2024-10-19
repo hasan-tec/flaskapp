@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-white min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8  w-full max-w-md">
+        <div class="text-center mb-8">
+            <i class="fas fa-robot text-5xl text-blue-500 mb-4"></i>
+            <h1 class="text-3xl font-bold text-gray-800">AI Chat Assistant</h1>
+            <p class="text-gray-600 mt-2">Your intelligent conversation partner</p>
+        </div>
+        
+        <div class="space-y-4">
+            <button id="createNewThread" class="w-full bg-blue-500 text-white py-3 px-4 rounded-lg hover:bg-blue-600 transition duration-300 flex items-center justify-center">
+                <i class="fas fa-plus-circle mr-2"></i>
+                Create New Thread
+            </button>
+            <button id="uploadExistingThread" class="w-full bg-green-500 text-white py-3 px-4 rounded-lg hover:bg-green-600 transition duration-300 flex items-center justify-center">
+                <i class="fas fa-upload mr-2"></i>
+                Upload for Existing Thread
+            </button>
+            <button id="skipToChat" class="w-full bg-purple-500 text-white py-3 px-4 rounded-lg hover:bg-purple-600 transition duration-300 flex items-center justify-center">
+                <i class="fas fa-comments mr-2"></i>
+                Skip to Chat
+            </button>
+        </div>
+
+        <div id="noThreadModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+            <div class="bg-white p-6 rounded-lg shadow-xl">
+                <h2 class="text-xl font-bold mb-4">No Active Thread</h2>
+                <p class="mb-4">You need to create a new thread first. Would you like to create one now?</p>
+                <div class="flex justify-end space-x-4">
+                    <button id="cancelCreateThread" class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition duration-300">Cancel</button>
+                    <button id="confirmCreateThread" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition duration-300">Create Thread</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            function getOrCreateAssistant(callback) {
+                $.ajax({
+                    url: "/api/get-or-create-assistant",
+                    method: "POST",
+                    contentType: "application/json",
+                    success: function(response) {
+                        localStorage.setItem('assistantId', response.assistant_id);
+                        callback(response.assistant_id);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error("Error getting or creating assistant:", error);
+                        alert("Failed to initialize assistant. Please try again.");
+                    }
+                });
+            }
+        
+            function createNewThreadAndProceed(action) {
+            $.ajax({
+                url: "/api/create-thread",
+                method: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ user_id: 'default_user' }),
+                success: function(response) {
+                    console.log("New thread created:", response.thread_id);
+                    localStorage.setItem('threadId', response.thread_id);
+                    localStorage.setItem('assistantId', response.assistant_id);
+                    if (action === 'upload') {
+                        proceedToUpload(response.thread_id);
+                    } else if (action === 'chat') {
+                        proceedToChat(response.thread_id);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error("Error creating thread:", error);
+                    alert("Failed to create a new thread. Please try again.");
+                }
+            });
+        }
+        
+            function proceedToUpload(threadId) {
+                const assistantId = localStorage.getItem('assistantId');
+                window.location.href = `/upload.html?threadId=${threadId}&assistantId=${assistantId}`;
+            }
+        
+            function proceedToChat(threadId) {
+                const assistantId = localStorage.getItem('assistantId');
+                window.location.href = `/chat.html?threadId=${threadId}&assistantId=${assistantId}`;
+            }
+        
+            $("#createNewThread").click(function() {
+                getOrCreateAssistant(function(assistantId) {
+                    createNewThreadAndProceed('upload');
+                });
+            });
+        
+            $("#uploadExistingThread").click(function() {
+                $.ajax({
+                    url: "/api/get-latest-thread",
+                    method: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ user_id: 'default_user' }),
+                    success: function(response) {
+                        console.log("Latest thread found:", response.thread_id);
+                        localStorage.setItem('threadId', response.thread_id);
+                        localStorage.setItem('assistantId', response.assistant_id);
+                        proceedToUpload(response.thread_id);
+                    },
+                    error: function(xhr, status, error) {
+                        if (xhr.status === 404) {
+                            console.log("No recent thread found. Creating a new one.");
+                            createNewThreadAndProceed('upload');
+                        } else {
+                            console.error("Error retrieving latest thread:", error);
+                            alert("Failed to retrieve or create a thread. Please try again.");
+                        }
+                    }
+                });
+            });
+        
+            $("#skipToChat").click(function() {
+    $.ajax({
+        url: "/api/get-latest-thread",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ user_id: 'default_user' }),
+        success: function(response) {
+            console.log("Latest thread found:", response.thread_id);
+            localStorage.setItem('threadId', response.thread_id);
+            localStorage.setItem('assistantId', response.assistant_id);
+            
+            // Check if data has been uploaded
+            $.ajax({
+                url: "/api/check-data-uploaded",
+                method: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ threadId: response.thread_id }),
+                success: function(dataResponse) {
+                    if (dataResponse.dataUploaded) {
+                        proceedToChat(response.thread_id);
+                    } else {
+                        if (confirm("No data has been uploaded for this thread. Would you like to upload data now?")) {
+                            proceedToUpload(response.thread_id);
+                        }
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error("Error checking data upload status:", error);
+                    alert("Failed to check data upload status. Please try again.");
+                }
+            });
+        },
+        error: function(xhr, status, error) {
+            if (xhr.status === 404) {
+                console.log("No recent thread found. Creating a new one.");
+                createNewThreadAndProceed('chat');
+            } else {
+                console.error("Error retrieving latest thread:", error);
+                alert("Failed to retrieve or create a thread. Please try again.");
+            }
+        }
+    });
+});
+        
+            $("#confirmCreateThread").click(function() {
+                $("#noThreadModal").addClass("hidden");
+                getOrCreateAssistant(function(assistantId) {
+                    createNewThreadAndProceed('upload');
+                });
+            });
+        
+            $("#cancelCreateThread").click(function() {
+                $("#noThreadModal").addClass("hidden");
+            });
+        });
+        </script>
+</body>
+</html>
